@@ -1,5 +1,4 @@
 use serialport::{SerialPort, TTYPort};
-//use std::error::Error;
 use std::io::{Read, Write};
 use std::time::Duration;
 
@@ -13,13 +12,14 @@ fn serial_starter(device: &str, baud: u32, timeout: Duration) -> TTYPort {
     port.write_request_to_send(true).unwrap();
     port
 }
-fn send_cmd(mut port: TTYPort, cmd: &str) {
+fn send_cmd(port: &mut TTYPort, cmd: &str) {
     match port.write_all(cmd.as_bytes()) {
-        () => println!("sent:{}", cmd),
+        Ok(()) => println!("sent:{}", cmd),
         Err(e) => eprintln!("failed to send \n{} because of {}", cmd, e),
     }
+    port.flush().ok();
 }
-fn recive_ack(port: TTYPort) {
+fn recive_ack(port: &mut TTYPort) {
     let mut buf = [0u8; 1024];
     match port.read(&mut buf) {
         Ok(n) => println!("printer:{}", String::from_utf8_lossy(&buf[..n])),
@@ -28,7 +28,7 @@ fn recive_ack(port: TTYPort) {
 }
 fn serial_killer(mut port: TTYPort) {
     port.flush().ok();
-    port.write_request_to_send(false).ok(); // master is no longer listening
+    port.write_request_to_send(false).ok();
     drop(port);
 }
 
@@ -36,8 +36,8 @@ fn main() {
     let timeout = Duration::from_secs(8);
     let mut port = serial_starter("/dev/ttyACM0", 115200, timeout);
 
-    send_cmd(port, "M115\n");
-    recive_ack(port);
+    send_cmd(&mut port, "M115\n");
+    recive_ack(&mut port);
 
     serial_killer(port);
 }
