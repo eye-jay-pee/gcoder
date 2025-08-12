@@ -1,43 +1,53 @@
-use serialport::{SerialPort, TTYPort};
-//use std::error::Error;
-use std::io::{Read, Write};
-use std::time::Duration;
-
-fn serial_starter(device: &str, baud: u32, timeout: Duration) -> TTYPort {
-    let mut port: serialport::TTYPort = serialport::new(device, baud)
-        .timeout(timeout)
-        .open_native()
-        .expect("couldn't open");
-
-    port.write_data_terminal_ready(false).unwrap();
-    port.write_request_to_send(true).unwrap();
-    port
-}
-fn send_cmd(mut port: TTYPort, cmd: &str) {
-    match port.write_all(cmd.as_bytes()) {
-        () => println!("sent:{}", cmd),
-        Err(e) => eprintln!("failed to send \n{} because of {}", cmd, e),
-    }
-}
-fn recive_ack(port: TTYPort) {
-    let mut buf = [0u8; 1024];
-    match port.read(&mut buf) {
-        Ok(n) => println!("printer:{}", String::from_utf8_lossy(&buf[..n])),
-        Err(e) => eprintln!("no ack recived from: {}", e),
-    }
-}
-fn serial_killer(mut port: TTYPort) {
-    port.flush().ok();
-    port.write_request_to_send(false).ok(); // master is no longer listening
-    drop(port);
-}
-
 fn main() {
-    let timeout = Duration::from_secs(8);
-    let mut port = serial_starter("/dev/ttyACM0", 115200, timeout);
+    print::avalible_ports_report();
 
-    send_cmd(port, "M115\n");
-    recive_ack(port);
+    let my_port = serial::connect_by_id(1, 115200);
 
-    serial_killer(port);
+    print::connected_port_report(my_port.as_ref());
+}
+
+mod serial {
+    use serialport::SerialPort;
+    pub fn connect(port: &str, baud: u32) -> Box<dyn SerialPort> {
+        use std::time::Duration;
+        let timeout = Duration::from_secs(1);
+        serialport::new(port, baud).timeout(timeout).open().unwrap()
+    }
+    pub fn connect_by_id(id: usize, baud: u32) -> Box<dyn SerialPort> {
+        use serialport::available_ports;
+        connect(&available_ports().unwrap()[id].port_name, baud)
+    }
+}
+
+mod print {
+    use serialport::SerialPort;
+    pub fn connected_port_report(port: &dyn SerialPort) {
+        println!("\x1b[1m{:^28}\x1b[0m", "PORT REPORT");
+        println!("{:>12} = {}", "name", port.name().unwrap());
+        println!("{:>12} = {}", "baud rate", port.baud_rate().unwrap());
+        println!("{:>12} = {}", "data bits", port.data_bits().unwrap());
+        println!("{:>12} = {}", "flow control", port.flow_control().unwrap());
+        println!("{:>12} = {}", "parity", port.parity().unwrap());
+        println!("{:>12} = {}", "stop bits", port.stop_bits().unwrap());
+        println!("{:>12} = {:#?}", "timeout", port.timeout());
+    }
+    pub fn avalible_ports_report() {
+        use serialport::{available_ports, SerialPortType::*};
+        println!("\x1b[1m{:^28}\x1b[0m", "AVAILABLE PORTS");
+        println!("{:<4}{:^16}{:>8}", "ID", "Name", "Type");
+
+        for (i, port) in available_ports().unwrap().iter().enumerate() {
+            println!(
+                "{:<4}{:^16}{:>8}",
+                i,
+                port.port_name,
+                match port.port_type {
+                    UsbPort(_) => "usb",
+                    PciPort => "pci",
+                    BluetoothPort => "bluetooth",
+                    Unknown => "unknown",
+                }
+            );
+        }
+    }
 }
