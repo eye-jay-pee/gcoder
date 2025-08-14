@@ -1,12 +1,29 @@
+mod print;
+
 fn main() {
     print::avalible_ports_report();
 
-    let my_port = serial::connect_by_id(1, 115200);
-
+    let mut my_port = serial::connect_by_id(1, 115200);
     print::connected_port_report(my_port.as_ref());
+    print::port_client_report(my_port.as_mut());
+
+    serial::write(my_port.as_mut(), b"M115\n");
+    let ack = serial::read(my_port.as_mut());
+    println!("ack: {}", ack);
+    print::connected_port_report(my_port.as_ref());
+    print::port_client_report(my_port.as_mut());
 }
 
 mod serial {
+    use chrono::DateTime;
+
+    pub struct packet {
+        data: String,
+        sent: DateTime,
+        ack: String,
+        acked: DateTime,
+    }
+
     use serialport::SerialPort;
     pub fn connect(port: &str, baud: u32) -> Box<dyn SerialPort> {
         use std::time::Duration;
@@ -17,37 +34,12 @@ mod serial {
         use serialport::available_ports;
         connect(&available_ports().unwrap()[id].port_name, baud)
     }
-}
-
-mod print {
-    use serialport::SerialPort;
-    pub fn connected_port_report(port: &dyn SerialPort) {
-        println!("\x1b[1m{:^28}\x1b[0m", "PORT REPORT");
-        println!("{:>12} = {}", "name", port.name().unwrap());
-        println!("{:>12} = {}", "baud rate", port.baud_rate().unwrap());
-        println!("{:>12} = {}", "data bits", port.data_bits().unwrap());
-        println!("{:>12} = {}", "flow control", port.flow_control().unwrap());
-        println!("{:>12} = {}", "parity", port.parity().unwrap());
-        println!("{:>12} = {}", "stop bits", port.stop_bits().unwrap());
-        println!("{:>12} = {:#?}", "timeout", port.timeout());
+    pub fn write(port: &mut dyn SerialPort, data: &[u8]) {
+        let _ = port.write_all(data);
     }
-    pub fn avalible_ports_report() {
-        use serialport::{available_ports, SerialPortType::*};
-        println!("\x1b[1m{:^28}\x1b[0m", "AVAILABLE PORTS");
-        println!("{:<4}{:^16}{:>8}", "ID", "Name", "Type");
-
-        for (i, port) in available_ports().unwrap().iter().enumerate() {
-            println!(
-                "{:<4}{:^16}{:>8}",
-                i,
-                port.port_name,
-                match port.port_type {
-                    UsbPort(_) => "usb",
-                    PciPort => "pci",
-                    BluetoothPort => "bluetooth",
-                    Unknown => "unknown",
-                }
-            );
-        }
+    pub fn read(port: &mut dyn SerialPort) -> String {
+        let mut buf = [0u8; 128];
+        let n = port.read(&mut buf).unwrap();
+        String::from_utf8_lossy(&buf[..n]).into_owned()
     }
 }
