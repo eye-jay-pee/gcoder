@@ -1,4 +1,3 @@
-use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
 
@@ -7,8 +6,8 @@ fn main() {
     let baud_rate = 115200;
     let timeout = Duration::from_secs(1);
     let cmd = "M115\n";
-    let mut buf = [0u8; 1024];
 
+    let mut buf = [0u8; 1024];
     let mut port = serialport::new(port_name, baud_rate)
         .timeout(timeout)
         .open()
@@ -17,17 +16,7 @@ fn main() {
     port.write_all(cmd.as_bytes()).unwrap();
     println!("sent {} to {}", cmd, port_name);
 
-    match port.read(&mut buf) {
-        Ok(n) => {
-            println!("Received {} bytes:", n);
-            println!("{}", String::from_utf8_lossy(&buf[..n]));
-        }
-        Err(e) => {
-            eprintln!("Response not recived from {} due to {}", port_name, e);
-        }
-    }
-
-    port.flush().ok();
-    port.write_request_to_send(false).ok(); // master is no longer listening
-    drop(port);
+    let n = port.read(&mut buf).unwrap();
+    println!("Received {} bytes:", n);
+    println!("{}", String::from_utf8_lossy(&buf[..n]));
 }
