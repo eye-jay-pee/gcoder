@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::thread;
 use std::time::Duration;
 
 fn main() {
@@ -7,10 +8,9 @@ fn main() {
     let timeout = Duration::from_secs(1);
     let cmd = "M115\n";
 
-    let mut buf = [0u8; 1024];
+    let mut buf = [0u8; 256];
 
     rebind();
-
     let mut port = serialport::new(port_name, baud_rate)
         .timeout(timeout)
         .open()
@@ -29,6 +29,6 @@ fn rebind() {
 
     let iface = "1-1.3:1.0"; // your interface from dmesg/udev
     fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", iface).unwrap();
-    // ... later, to restore:
+    thread::sleep(Duration::from_millis(200));
     fs::write("/sys/bus/usb/drivers/cdc_acm/bind", iface).unwrap();
 }

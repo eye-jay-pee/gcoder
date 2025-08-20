@@ -1,0 +1,11 @@
+# ./gcoder/.cargo/config.toml
+[target.'cfg(unix)']
+runner = "sudo"
+
+
+
+# for a seperate exe that elevates when needed for rebinding the driver
+# # ./gcoder/.cargo/config.toml
+# [[bin]]
+# name = "gcoder"
+# runner = "sudo"
