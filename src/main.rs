@@ -9,7 +9,7 @@ fn main() {
 
     let mut buf = [0u8; 1024];
 
-    let _ = rebind_driver(port_name);
+    rebind();
 
     let mut port = serialport::new(port_name, baud_rate)
         .timeout(timeout)
@@ -24,31 +24,11 @@ fn main() {
     println!("{}", String::from_utf8_lossy(&buf[..n]));
 }
 
-use std::{
-    io,
-    process::{Command, Stdio},
-};
+fn rebind() {
+    use std::fs;
 
-fn call_script(script: &str, args: &str) -> io::Result<()> {
-    let status = Command::new(&script)
-        .arg(args)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "script returned non-zero",
-        ))
-    }
-}
-
-/// This simulates unplugging the device for 0.1 seconds. It is to be used as
-/// a last-resort reset when the printer stops responding.
-fn rebind_driver(dev: &str) {
-    let _ = call_script("scripts/rebind_driver.sh", dev);
+    let iface = "1-1.3:1.0"; // your interface from dmesg/udev
+    fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", iface).unwrap();
+    // ... later, to restore:
+    fs::write("/sys/bus/usb/drivers/cdc_acm/bind", iface).unwrap();
 }
