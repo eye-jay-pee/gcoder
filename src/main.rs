@@ -14,30 +14,50 @@ fn main() {
 }
 
 mod serial {
-    use serialport::{Result, SerialPort, SerialPortBuilder};
+    use serialport::{Result, SerialPort};
     use std::time::Duration;
 
     pub struct _Printer {
-        builder: Box<SerialPortBuilder>,
+        builder: serialport::SerialPortBuilder,
+
         port: Option<Box<dyn SerialPort>>,
+        _verbose: bool,
         _log_file: String,
     }
     impl _Printer {
-        pub fn _new(builder: Box<SerialPortBuilder>) -> Self {
+        pub fn _new(builder: serialport::SerialPortBuilder) -> Self {
             _Printer {
                 builder: builder,
                 port: None,
+                _verbose: false,
                 _log_file: String::from("~/.gcoder/log"),
             }
         }
-        pub fn _send(&mut self, _transmission: &str) -> Result<String> {
-            if self.port.is_none() {
-                match self.connect() {}
-            }
+        pub fn _exchange(&mut self, _transmission: &str) -> Result<String> {
+            //self.connect()? {}
 
             Ok(String::from("ok"))
         }
-        fn connect(&mut self) -> Result<()> {}
+        fn _connect(&mut self) -> Result<()> {
+            self.port = Some(self.builder.clone().open()?);
+            Ok(())
+        }
+        fn _connect_if_not_already(&mut self) -> Result<()> {
+            match self.port {
+                Some(_) => Ok(()),
+                None => self._connect(),
+            }
+        }
+        fn _rebind(&mut self) -> Result<()> {
+            use std::time::Duration;
+            use std::{fs, thread};
+
+            let iface = "1-1.3:1.0"; // your interface from dmesg/udev
+            fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", iface)?;
+            thread::sleep(Duration::from_millis(200));
+            fs::write("/sys/bus/usb/drivers/cdc_acm/bind", iface)?;
+            Ok(())
+        }
     }
 
     pub fn transfer(port: &mut dyn SerialPort, data: &str) -> Result<String> {
@@ -48,11 +68,7 @@ mod serial {
 
         Ok(String::from_utf8_lossy(&buf[..n]).into_owned())
     }
-    pub fn initalize(
-        name: &str,
-        baud: u32,
-        timeout: Duration,
-    ) -> Result<Box<dyn SerialPort>> {
+    pub fn initalize(name: &str, baud: u32, timeout: Duration) -> Result<Box<dyn SerialPort>> {
         rebind()?;
         Ok(serialport::new(name, baud).timeout(timeout).open()?)
     }
