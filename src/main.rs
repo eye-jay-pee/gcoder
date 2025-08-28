@@ -14,11 +14,30 @@ fn main() {
 }
 
 mod serial {
-    use serialport::{Result, SerialPort};
+    use serialport::{Result, SerialPort, SerialPortBuilder};
     use std::time::Duration;
 
     pub struct _Printer {
-        _port: Option<Box<dyn SerialPort>>,
+        builder: Box<SerialPortBuilder>,
+        port: Option<Box<dyn SerialPort>>,
+        _log_file: String,
+    }
+    impl _Printer {
+        pub fn _new(builder: Box<SerialPortBuilder>) -> Self {
+            _Printer {
+                builder: builder,
+                port: None,
+                _log_file: String::from("~/.gcoder/log"),
+            }
+        }
+        pub fn _send(&mut self, _transmission: &str) -> Result<String> {
+            if self.port.is_none() {
+                match self.connect() {}
+            }
+
+            Ok(String::from("ok"))
+        }
+        fn connect(&mut self) -> Result<()> {}
     }
 
     pub fn transfer(port: &mut dyn SerialPort, data: &str) -> Result<String> {
