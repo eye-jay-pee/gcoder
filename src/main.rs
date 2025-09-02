@@ -15,50 +15,8 @@ fn main() {
 
 mod serial {
     use serialport::{Result, SerialPort};
+    use std::path::Path;
     use std::time::Duration;
-
-    pub struct _Printer {
-        builder: serialport::SerialPortBuilder,
-
-        port: Option<Box<dyn SerialPort>>,
-        _verbose: bool,
-        _log_file: String,
-    }
-    impl _Printer {
-        pub fn _new(builder: serialport::SerialPortBuilder) -> Self {
-            _Printer {
-                builder: builder,
-                port: None,
-                _verbose: false,
-                _log_file: String::from("~/.gcoder/log"),
-            }
-        }
-        pub fn _exchange(&mut self, _transmission: &str) -> Result<String> {
-            //self.connect()? {}
-
-            Ok(String::from("ok"))
-        }
-        fn _connect(&mut self) -> Result<()> {
-            self.port = Some(self.builder.clone().open()?);
-            Ok(())
-        }
-        fn _connect_if_not_already(&mut self) -> Result<()> {
-            match self.port {
-                Some(_) => Ok(()),
-                None => self._connect(),
-            }
-        }
-        fn _rebind(&mut self) -> Result<()> {
-            use std::time::Duration;
-            use std::{fs, thread};
-
-            let iface = "1-1.3:1.0"; // your interface from dmesg/udev
-            fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", iface)?;
-            thread::sleep(Duration::from_millis(200));
-            fs::write("/sys/bus/usb/drivers/cdc_acm/bind", iface)?;
-            Ok(())
-        }
-    }
 
     pub fn transfer(port: &mut dyn SerialPort, data: &str) -> Result<String> {
         let mut buf = [0u8; 256];
@@ -68,19 +26,60 @@ mod serial {
 
         Ok(String::from_utf8_lossy(&buf[..n]).into_owned())
     }
-    pub fn initalize(name: &str, baud: u32, timeout: Duration) -> Result<Box<dyn SerialPort>> {
-        rebind()?;
+    pub fn initalize(
+        name: &str,
+        baud: u32,
+        timeout: Duration,
+    ) -> Result<Box<dyn SerialPort>> {
+        rebind(name)?;
         Ok(serialport::new(name, baud).timeout(timeout).open()?)
     }
 
-    fn rebind() -> std::io::Result<()> {
+    fn rebind(device: &str) -> std::io::Result<()> {
         use std::time::Duration;
         use std::{fs, thread};
 
-        let iface = "1-1.3:1.0"; // your interface from dmesg/udev
-        fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", iface)?;
+        let dev_struct = Path::new(device);
+        let addr = helpers::device_address(dev_struct)?;
+        println!("addr:{:?}", addr);
+
+        fs::write("/sys/bus/usb/drivers/cdc_acm/unbind", &addr)?;
         thread::sleep(Duration::from_millis(200));
-        fs::write("/sys/bus/usb/drivers/cdc_acm/bind", iface)?;
+        fs::write("/sys/bus/usb/drivers/cdc_acm/bind", &addr)?;
         Ok(())
+    }
+
+    mod helpers {
+        use std::fs::canonicalize;
+        use std::io::{Error, ErrorKind::InvalidInput, Result};
+        use std::path::{Path, PathBuf};
+
+        pub fn device_address(device: &Path) -> Result<String> {
+            physical_address(device).ok_or_else(|| {
+                Error::new(
+                    InvalidInput,
+                    format!("cannot find physical address for {:?}", device),
+                )
+            })
+        }
+
+        fn physical_address(device: &Path) -> Option<String> {
+            let symbolic_link = driver_symlink(device)?;
+            let physical_addr = follow_link(symbolic_link.as_path())?;
+
+            Some(String::from(format!("{}", physical_addr)))
+        }
+        fn driver_symlink(device: &Path) -> Option<PathBuf> {
+            if device.parent()?.to_str()? != "/dev" {
+                return None;
+            }
+            let file_n = device.file_name()?.to_str()?;
+            Some(PathBuf::from(format!("/sys/class/tty/{}/device", file_n,)))
+        }
+        fn follow_link(symlink: &Path) -> Option<String> {
+            let canonical = canonicalize(symlink).ok()?;
+            let physical = canonical.file_name()?.to_str()?;
+            Some(String::from(physical))
+        }
     }
 }
